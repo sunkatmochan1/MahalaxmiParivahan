@@ -1,20 +1,24 @@
 const express = require("express");
 const app = express();
 
+// IMPORTANT: UIDAI sends XML and form data, so add both
 app.use(express.json());
+app.use(express.text({ type: '*/*' })); // This handles UIDAI XML
+app.use(express.urlencoded({ extended: true }));
 
-// Home route
 app.get("/", (req, res) => {
   res.send("Mahalaxmi Parivahan Website Running ✅");
   });
 
-  // Callback URL
-  app.post("/callback", (req, res) => {
-    console.log("Callback received:", req.body);
-      res.status(200).send({ message: "Callback received successfully" });
-      });
+  // FIXED: Change /callback to /uidai/callback for UIDAI
+  app.post("/uidai/callback", (req, res) => {
+    console.log("UIDAI Response received:", req.body);
+      
+        // UIDAI needs 200 OK response
+          res.status(200).send("OK");
+          });
 
-      const PORT = process.env.PORT || 3000;
-      app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-        });
+          const PORT = process.env.PORT || 3000;
+          app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+            });
