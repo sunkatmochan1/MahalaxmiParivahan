@@ -1,11 +1,12 @@
 {
-      "name": "mahalaxmi-site",
-        "version": "1.0.0",
-          "main": "server.js",
-            "scripts": {
-                "start": "node server.js"
-                  },
-                    "dependencies": {
-                        "express": "^4.18.2",
-                        "jose": "^5.9.6"  
-                          }
+  "name": "mahalaxmi-site",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "jose": "^5.9.6"
+  }
+}
