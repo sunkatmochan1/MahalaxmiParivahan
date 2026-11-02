@@ -12,12 +12,32 @@ app.get("/", (req, res) => {
 
   // FIXED: Change /callback to /uidai/callback for UIDAI
   app.post("/uidai/callback", (req, res) => {
-    console.log("UIDAI Response received:", req.body);
-      
-        // UIDAI needs 200 OK response
-          res.status(200).send("OK");
-          });
+    const xml = typeof req.body === "string" ? req.body : "";
 
+    // Extract transaction ID without logging the credential
+    const match = xml.match(/<TxnID>\s*([^<]+)\s*<\/TxnID>/i);
+
+    if (!match) {
+        return res.status(400)
+            .type("application/xml")
+            .send("<Response><ResponseCode>400</ResponseCode><ResponseMsg>Invalid request</ResponseMsg></Response>");
+    }
+
+    const txnId = match[1].trim();
+
+    const acknowledgement =
+        `<Response>
+            <TxnID>${txnId}</TxnID>
+            <ResponseCode>200</ResponseCode>
+            <ResponseMsg>Success</ResponseMsg>
+        </Response>`;
+
+    console.log("UIDAI callback received. Transaction ID:", txnId);
+
+    res.status(200)
+        .type("application/xml")
+        .send(acknowledgement);
+});
           const PORT = process.env.PORT || 3000;
           app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
