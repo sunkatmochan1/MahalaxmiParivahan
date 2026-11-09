@@ -1,4 +1,5 @@
 const express = require("express");
+console.log("Node.js version:", process.version);
 const app = express();
 
 // Receive JSON, XML and form-data requests
