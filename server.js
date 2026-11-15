@@ -1,66 +1,58 @@
+
 const express = require("express");
 const app = express();
+
+// Temporary, privacy-safe diagnostic logging.
+// Never log request bodies, Aadhaar data, JWTs or disclosures.
+app.use((req, res, next) => {
+    if (req.method === "POST" && req.path === "/uidai/callback") {
+        console.log("[OVSE] callback_request_received", {
+            contentType: req.get("content-type") || "missing"
+        });
+    }
+    next();
+});
+
 app.use(express.text({
     type: ["application/xml", "text/xml", "text/plain"],
     limit: "1mb"
 }));
+
 app.use(express.json({ limit: "1mb" }));
+
 const { XMLParser, XMLValidator } = require("fast-xml-parser");
 
 const xmlParser = new XMLParser({
     ignoreAttributes: false,
     processEntities: false,
-    trimValues: true,
+    trimValues: true
 });
 
-const UIDAI_JWKS_URL =
-    "https://pehchaan.uidai.gov.in/.well-known/jwks.json";
+// Load UIDAI JWKS snapshot from Render environment variable.
+let uidaiJwksData;
 
-const UIDAI_KEY_ID =
-    "uidai-37a8e742-c375-443c-8ce5-8b7a0822cb6b";
+try {
+    uidaiJwksData = JSON.parse(process.env.UIDAI_JWKS_JSON || "");
+} catch {
+    throw new Error("UIDAI_JWKS_JSON is missing or is not valid JSON");
+}
+
+if (
+    !uidaiJwksData ||
+    !Array.isArray(uidaiJwksData.keys) ||
+    uidaiJwksData.keys.length === 0 ||
+    uidaiJwksData.keys.some(
+        key => !key || typeof key.kid !== "string" || !key.kid
+    )
+) {
+    throw new Error("UIDAI_JWKS_JSON does not contain a valid JWKS key list");
+}
 
 const josePromise = import("jose");
 
-const uidaiJwksPromise = josePromise.then(({ createRemoteJWKSet }) =>
-    createRemoteJWKSet(
-        new URL(UIDAI_JWKS_URL),
-        {
-            timeoutDuration: 15000,
-            cooldownDuration: 30000,
-            cacheMaxAge: 600000
-        }
-    )
+const uidaiJwksPromise = josePromise.then(({ createLocalJWKSet }) =>
+    createLocalJWKSet(uidaiJwksData)
 );
-// TEMPORARY UIDAI JWKS connectivity diagnostic
-(async () => {
-    const started = Date.now();
-
-    try {
-        const response = await fetch(UIDAI_JWKS_URL, {
-            signal: AbortSignal.timeout(20000)
-        });
-
-        console.log(
-            `[JWKS-DIAG] HTTP ${response.status}, ` +
-            `time: ${Date.now() - started}ms`
-        );
-
-        const data = await response.json();
-
-        console.log(
-            `[JWKS-DIAG] Public keys received: ${
-                Array.isArray(data.keys) ? data.keys.length : 0
-            }`
-        );
-
-    } catch (error) {
-        console.error(
-            "[JWKS-DIAG] Failed:",
-            error.name,
-            error.cause?.code || error.code || error.message
-        );
-    }
-})();
 
 const CLOUDFLARE_API_URL =
     "https://mahalaxmi-ovse-api.mahalaxmiparivahanpvtltd.workers.dev";
@@ -91,16 +83,17 @@ async function cloudflareRequest(path, method = "GET", body = null) {
             `${CLOUDFLARE_API_URL}${path}`,
             options
         );
-    } catch (error) {
+    } catch {
         const networkError = new Error("Cloudflare network request failed");
         networkError.status = 503;
         throw networkError;
     }
+
     let data;
 
     try {
         data = await response.json();
-    } catch (error) {
+    } catch {
         const parseError = new Error("Invalid response from Cloudflare");
         parseError.status =
             response.ok || response.status >= 500
@@ -113,7 +106,6 @@ async function cloudflareRequest(path, method = "GET", body = null) {
         const error = new Error(
             `Cloudflare API error: HTTP ${response.status}`
         );
-
         error.status = response.status;
         throw error;
     }
@@ -137,16 +129,16 @@ async function getValidTransaction(txnId) {
     }
 
     if (transaction.expires_at <= now) {
-        throw new Error("Transaction has expired");
+        throw new Error("Transaction has already expired");
     }
 
     return transaction;
 }
 
-// Receive JSON, XML and form-data requests
+// Receive form-data requests.
 app.use(express.urlencoded({ extended: true }));
 
-// Home route
+// Home route.
 app.get("/", (req, res) => {
     res.send("Mahalaxmi Parivahan Website Running");
 });
@@ -154,6 +146,16 @@ app.get("/", (req, res) => {
 app.post("/uidai/callback", async (req, res) => {
     const xml = typeof req.body === "string" ? req.body : "";
     let txnId = "";
+    let stage = "request_body_parsed";
+
+    console.log("[OVSE] callback_body_parsed", {
+        bodyType: typeof req.body,
+        bodyLength: Buffer.isBuffer(req.body)
+            ? req.body.length
+            : (typeof req.body === "string"
+                ? Buffer.byteLength(req.body)
+                : 0)
+    });
 
     const sendAck = (txnId, code, message) => {
         const safeTxn = String(txnId || "").replace(/[<>&"']/g, "");
@@ -169,33 +171,55 @@ app.post("/uidai/callback", async (req, res) => {
                 </Response>`
             );
     };
+
     if (!xml.trim()) {
+        console.warn("[OVSE] callback_rejected", {
+            reason: "empty_body"
+        });
         return sendAck("", 400, "Empty callback body");
-    }  
+    }
 
     try {
+        stage = "xml_validation";
+
         const validation = XMLValidator.validate(xml);
 
         if (validation !== true) {
-           return sendAck(txnId, 400, "Invalid XML");
-       }
+            console.warn("[OVSE] callback_rejected", {
+                stage,
+                reason: "invalid_xml"
+            });
+            return sendAck(txnId, 400, "Invalid XML");
+        }
+
         const parsed = xmlParser.parse(xml);
         const callback = parsed?.Request;
+
         if (!callback || typeof callback !== "object") {
-           return sendAck(txnId, 400, "Invalid callback structure");
-       }
+            console.warn("[OVSE] callback_rejected", {
+                stage,
+                reason: "invalid_callback_structure"
+            });
+            return sendAck(txnId, 400, "Invalid callback structure");
+        }
 
         txnId = String(callback?.TxnID || "").trim();
         const credential = String(callback?.Credential || "").trim();
 
         if (!txnId || !credential) {
+            console.warn("[OVSE] callback_rejected", {
+                stage,
+                reason: "missing_txn_or_credential"
+            });
             return sendAck(txnId, 400, "Invalid callback data");
         }
 
-        // Confirm transaction is registered, pending and unexpired
+        // Confirm transaction is registered, pending and unexpired.
+        stage = "transaction_lookup";
         await getValidTransaction(txnId);
+        console.log("[OVSE] transaction_validated");
 
-        // Separate compact JWT and SD-JWT disclosures
+        // Separate compact JWT and SD-JWT disclosures.
         const parts = credential.split("~");
         const compactJwt = parts.shift();
         const disclosures = parts.filter(Boolean);
@@ -204,22 +228,28 @@ app.post("/uidai/callback", async (req, res) => {
             throw new Error("Invalid SD-JWT format");
         }
 
-        // Verify UIDAI JWT signature
+        // Verify UIDAI JWT signature.
+        stage = "jwt_signature_verification";
+
         const { jwtVerify } = await josePromise;
         let jwks;
 
         try {
             jwks = await uidaiJwksPromise;
         } catch (error) {
-            console.error("UIDAI JWKS retrieval failed:", error.message);
+            console.error(
+                "UIDAI JWKS retrieval failed:",
+                error.message
+            );
+
             return sendAck(
-                txnId, 
+                txnId,
                 503,
                 "UIDAI verification service temporarily unavailable"
             );
         }
 
-               let payload;
+        let payload;
         let protectedHeader;
 
         try {
@@ -231,6 +261,8 @@ app.post("/uidai/callback", async (req, res) => {
 
             payload = verified.payload;
             protectedHeader = verified.protectedHeader;
+
+            console.log("[OVSE] jwt_signature_verified");
 
         } catch (error) {
             console.error(
@@ -252,11 +284,22 @@ app.post("/uidai/callback", async (req, res) => {
 
             throw error;
         }
-        if (protectedHeader.kid !== UIDAI_KEY_ID) {
+
+        const matchedUidaiKey = uidaiJwksData.keys.find(
+            key => key.kid === protectedHeader.kid
+        );
+
+        if (
+            !matchedUidaiKey ||
+            matchedUidaiKey.kty !== "RSA" ||
+            protectedHeader.alg !== "RS256"
+        ) {
             throw new Error("Unexpected UIDAI signing key");
         }
 
-        // Require SHA-256 disclosure hashing
+        // Require SHA-256 disclosure hashing.
+        stage = "sd_jwt_disclosure_verification";
+
         if (payload._sd_alg !== "sha-256") {
             throw new Error("Unsupported SD-JWT hash algorithm");
         }
@@ -265,7 +308,7 @@ app.post("/uidai/callback", async (req, res) => {
             throw new Error("SD-JWT disclosure digest list missing");
         }
 
-        // Collect disclosure digest references recursively
+        // Collect disclosure digest references recursively.
         const collectDigests = (value, output) => {
             if (!value || typeof value !== "object") return;
 
@@ -320,7 +363,7 @@ app.post("/uidai/callback", async (req, res) => {
             return { digest, decoded };
         });
 
-        // Validate each disclosure against a referenced digest.
+        // Validate disclosures against referenced digests.
         // Nested disclosures may introduce further digest references.
         const verifiedDigests = new Set();
         let remaining = [...pendingDisclosures];
@@ -352,20 +395,32 @@ app.post("/uidai/callback", async (req, res) => {
             throw new Error("Not all disclosures were verified");
         }
 
-        // Report successful verification to Cloudflare
+        console.log("[OVSE] disclosures_verified", {
+            count: verifiedDigests.size
+        });
+
+        // Report successful verification to Cloudflare.
+        stage = "cloudflare_completion";
+
         await cloudflareRequest("/callbacks/complete", "POST", {
             txn: txnId,
             result: "VERIFIED",
             credential_verified: true
         });
 
-        console.log("UIDAI credential successfully verified for transaction:", txnId);
+        console.log("[OVSE] cloudflare_completion_succeeded");
+        console.log("[OVSE] uidai_credential_verified");
 
         return sendAck(txnId, 200, "Success");
 
     } catch (error) {
-        // Do not log the credential or disclosure contents
-        console.error("UIDAI callback verification failed:", error.message);
+        // Log only processing stage and error description.
+        // Never log credentials or disclosure contents.
+        console.error("[OVSE] callback_processing_failed", {
+            stage,
+            error: error.code || error.message,
+            status: error.status || null
+        });
 
         return sendAck(
             txnId,
@@ -373,11 +428,11 @@ app.post("/uidai/callback", async (req, res) => {
             error.status >= 500
                 ? "Verification service temporarily unavailable"
                 : "Credential verification failed"
-       );
+        );
     }
 });
 
-// Start server
+// Start server.
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
