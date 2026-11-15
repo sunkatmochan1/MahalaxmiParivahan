@@ -31,6 +31,36 @@ const uidaiJwksPromise = josePromise.then(({ createRemoteJWKSet }) =>
         }
     )
 );
+// TEMPORARY UIDAI JWKS connectivity diagnostic
+(async () => {
+    const started = Date.now();
+
+    try {
+        const response = await fetch(UIDAI_JWKS_URL, {
+            signal: AbortSignal.timeout(20000)
+        });
+
+        console.log(
+            `[JWKS-DIAG] HTTP ${response.status}, ` +
+            `time: ${Date.now() - started}ms`
+        );
+
+        const data = await response.json();
+
+        console.log(
+            `[JWKS-DIAG] Public keys received: ${
+                Array.isArray(data.keys) ? data.keys.length : 0
+            }`
+        );
+
+    } catch (error) {
+        console.error(
+            "[JWKS-DIAG] Failed:",
+            error.name,
+            error.cause?.code || error.code || error.message
+        );
+    }
+})();
 
 const CLOUDFLARE_API_URL =
     "https://mahalaxmi-ovse-api.mahalaxmiparivahanpvtltd.workers.dev";
