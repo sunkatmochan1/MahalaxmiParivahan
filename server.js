@@ -25,7 +25,7 @@ const uidaiJwksPromise = josePromise.then(({ createRemoteJWKSet }) =>
     createRemoteJWKSet(
         new URL(UIDAI_JWKS_URL),
         {
-            timeoutDuration: 5000,
+            timeoutDuration: 15000,
             cooldownDuration: 30000,
             cacheMaxAge: 600000
         }
