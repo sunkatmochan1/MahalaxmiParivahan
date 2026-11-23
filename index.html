@@ -1,10 +1,183 @@
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Mahalaxmi Parivahan</title>
-  </head>
-  <body>
-    <h1>Welcome to Mahalaxmi Parivahan 🚛</h1>
-      <p>Website is live.</p>
-      </body>
-      </html>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aadhaar Verification | Mahalaxmi Parivahan</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f3f6fa;
+            color: #243247;
+        }
+
+        header {
+            background: #12345a;
+            color: white;
+            padding: 22px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 25px;
+        }
+
+        main {
+            max-width: 650px;
+            margin: 35px auto;
+            padding: 25px;
+        }
+
+        .panel {
+            background: white;
+            padding: 28px;
+            border-radius: 12px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.07);
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #12345a;
+        }
+
+        .description {
+            color: #65748b;
+            line-height: 1.6;
+        }
+
+        .consent-list {
+            margin-top: 25px;
+        }
+
+        .consent-list label {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 13px 0;
+            border-bottom: 1px solid #edf0f4;
+            cursor: pointer;
+        }
+
+        .consent-list input {
+            width: 18px;
+            height: 18px;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 25px;
+            padding: 15px;
+            border: none;
+            border-radius: 7px;
+            background: #12345a;
+            color: white;
+            font-size: 16px;
+        }
+
+        button:disabled {
+            background: #9aa8b8;
+            cursor: not-allowed;
+        }
+
+        .notice {
+            margin-top: 20px;
+            padding: 14px;
+            background: #eef4fa;
+            border-radius: 7px;
+            color: #52657a;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #7b8795;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>Mahalaxmi Parivahan</h1>
+    <p>Aadhaar Verification Portal</p>
+</header>
+
+<main>
+    <section class="panel">
+
+        <h2>Aadhaar Verification</h2>
+
+        <p class="description">
+            Select the information you consent to share through
+            the official mAadhaar application.
+        </p>
+
+        <div class="consent-list">
+
+            <label>
+                <input type="checkbox" checked>
+                Photograph
+            </label>
+
+            <label>
+                <input type="checkbox" checked>
+                Name
+            </label>
+
+            <label>
+                <input type="checkbox" checked>
+                Date of Birth
+            </label>
+
+            <label>
+                <input type="checkbox" checked>
+                Gender
+            </label>
+
+            <label>
+                <input type="checkbox" checked>
+                Full Address
+            </label>
+
+            <label>
+                <input type="checkbox" checked>
+                Mobile Number
+            </label>
+
+            <label>
+                <input type="checkbox" checked>
+                Email Address
+            </label>
+
+        </div>
+
+        <button type="button" disabled>
+            QR Generation – Integration Pending
+        </button>
+
+        <div class="notice">
+            Your information will be requested only after
+            your consent. Verification will be performed
+            through the official UIDAI integration.
+        </div>
+
+    </section>
+</main>
+
+<footer>
+    © Mahalaxmi Parivahan
+</footer>
+
+</body>
+</html>
