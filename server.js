@@ -395,6 +395,19 @@ app.post("/uidai/callback", async (req, res) => {
             throw new Error("Not all disclosures were verified");
         }
 
+                // Temporary diagnostic: log claim names only, never claim values.
+        const disclosedClaimNames = pendingDisclosures
+            .filter(item => item.decoded.length === 3)
+            .map(item => item.decoded[1])
+            .filter(name => typeof name === "string");
+
+        console.log("[OVSE] disclosed_claim_names", {
+            names: disclosedClaimNames,
+            namedDisclosureCount: disclosedClaimNames.length,
+            arrayDisclosureCount: pendingDisclosures.filter(
+                item => item.decoded.length === 2
+            ).length
+        });
         console.log("[OVSE] disclosures_verified", {
             count: verifiedDigests.size
         });
