@@ -140,9 +140,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Home route.
 app.get("/", (req, res) => {
-    res.send("Mahalaxmi Parivahan Website Running");
+    res.sendFile(__dirname + "/index.html");
 });
-
 app.post("/uidai/callback", async (req, res) => {
     const xml = typeof req.body === "string" ? req.body : "";
     let txnId = "";
